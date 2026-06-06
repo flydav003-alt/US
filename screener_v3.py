@@ -916,8 +916,8 @@ def generate_html(rows, sort_key, ascending, index_name, generated_at, market_in
         else:         cls, tag = "neg",        "🔻"
         bar = int(v)
         kline_url = f"https://flydav003-alt.github.io/k-line/?stock={ticker}"
-        link = f'<a href="{kline_url}" target="_blank" style="text-decoration:none;color:inherit;"><span class="score-num">{v}</span></a>'
-        return f'<td class="{cls} score-cell">{tag}{link}<div class="score-bar"><div class="score-fill" style="width:{bar}%"></div></div></td>'
+        link = f'<a href="{kline_url}" target="_blank" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:2px">{tag}<span class="score-num">{v}</span></a>'
+        return f'<td class="{cls} score-cell">{link}<div class="score-bar"><div class="score-fill" style="width:{bar}%"></div></div></td>'
 
     def entry_signal_cell(v):
         if not v: return '<td class="na">—</td>'
@@ -1032,10 +1032,11 @@ body {{ font-family: -apple-system,"Segoe UI",Arial,sans-serif; background:#f0f2
 .controls {{ padding:10px 24px; background:#fff; border-bottom:1px solid #eee; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }}
 .controls input[type=text] {{ padding:6px 12px; border:1px solid #ccc; border-radius:6px; font-size:12px; width:180px; }}
 .slider-wrap {{ display:flex; align-items:center; gap:6px; font-size:12px; color:#555; }}
-.slider-wrap input[type=range] {{ width:100px; accent-color:#1a56db; -webkit-appearance:none; appearance:none; margin:0; padding:0; cursor:pointer; }}
-.slider-wrap input[type=range]::-webkit-slider-runnable-track {{ border-radius:3px; }}
-.slider-wrap input[type=range]::-moz-range-track {{ border-radius:3px; }}
-.slider-val {{ font-weight:600; color:#1a1a2e; min-width:22px; text-align:center; }}
+.slider-wrap input[type=range] {{ width:110px; accent-color:#1a56db; -webkit-appearance:none; appearance:none; margin:0; padding:0; cursor:pointer; height:6px; border-radius:3px; background:linear-gradient(to right,#1a56db 0%,#1a56db 0%,#d1d5db 0%,#d1d5db 100%); outline:none; }}
+.slider-wrap input[type=range]::-webkit-slider-thumb {{ -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:#1a56db; cursor:pointer; border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.25); }}
+.slider-wrap input[type=range]::-moz-range-thumb {{ width:16px; height:16px; border-radius:50%; background:#1a56db; cursor:pointer; border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.25); }}
+.slider-wrap input[type=range]::-moz-range-track {{ height:6px; border-radius:3px; background:#d1d5db; }}
+.slider-val {{ font-weight:600; color:#1a1a2e; min-width:26px; text-align:center; }}
 /* ── Table ── */
 .table-wrap {{ overflow-x:auto; padding:16px 24px; min-height:300px; }}
 table {{ width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.08); }}
@@ -1163,6 +1164,21 @@ td.analysts {{ color:#888; font-size:11px; }}
     綜合分 ≥ <input type="range" id="sliderC" min="0" max="100" value="0" oninput="updateSlider('C');filterTable()">
     <span class="slider-val" id="valC">0</span>
   </div>
+  <select id="selSig" onchange="filterTable()" style="padding:5px 8px;border:1px solid #ccc;border-radius:6px;font-size:12px;background:#fff;color:#333;cursor:pointer">
+    <option value="">全部訊號</option>
+    <option value="突破放量">💥突破放量</option>
+    <option value="主力進場">🚀主力進場</option>
+    <option value="洗盤結束">✅洗盤結束</option>
+    <option value="量縮整理">📉量縮整理</option>
+    <option value="__NONE__">（無訊號）</option>
+  </select>
+  <select id="selPat" onchange="filterTable()" style="padding:5px 8px;border:1px solid #ccc;border-radius:6px;font-size:12px;background:#fff;color:#333;cursor:pointer">
+    <option value="">全部型態</option>
+    <option value="A升評爆量">A升評爆量</option>
+    <option value="B回檔承接">B回檔承接</option>
+    <option value="C底背離">C底背離</option>
+    <option value="__NONE__">（無型態）</option>
+  </select>
 </div>
 
 <div class="table-wrap">
@@ -1210,10 +1226,14 @@ function switchTab(id, btn) {{
   btn.classList.add('active');
 }}
 
-// ── Slider 更新 ──
+// ── Slider 更新（含動態填色）──
 function updateSlider(t) {{
-  if (t==='K') document.getElementById('valK').textContent = document.getElementById('sliderK').value;
-  else          document.getElementById('valC').textContent = document.getElementById('sliderC').value;
+  const el = t==='K' ? document.getElementById('sliderK') : document.getElementById('sliderC');
+  const valEl = t==='K' ? document.getElementById('valK') : document.getElementById('valC');
+  if (!el) return;
+  valEl.textContent = el.value;
+  const pct = el.value + '%';
+  el.style.background = 'linear-gradient(to right,#1a56db 0%,#1a56db '+pct+',#d1d5db '+pct+',#d1d5db 100%)';
 }}
 
 // ── 選股篩選 ──
@@ -1221,19 +1241,38 @@ function filterTable() {{
   const q    = document.getElementById('searchBox').value.toLowerCase();
   const minK = parseInt(document.getElementById('sliderK').value) || 0;
   const minC = parseInt(document.getElementById('sliderC').value) || 0;
+  const selSig = document.getElementById('selSig').value;
+  const selPat = document.getElementById('selPat').value;
   document.querySelectorAll('#mainTable tbody tr').forEach(tr => {{
     const ticker  = tr.cells[0].innerText.toLowerCase();
     const klineEl = tr.cells[5].querySelector('.score-num');
     const scoreEl = tr.cells[6].querySelector('.score-num');
     const kScore  = klineEl ? parseFloat(klineEl.innerText) : 0;
     const cScore  = scoreEl ? parseFloat(scoreEl.innerText) : 0;
-    const show = (!q || ticker.includes(q)) && kScore >= minK && cScore >= minC;
+    const sigText = tr.cells[13] ? tr.cells[13].innerText.trim() : '';
+    const patText = tr.cells[14] ? tr.cells[14].innerText.trim() : '';
+    let sigOk = true;
+    if (selSig === '__NONE__') {{ sigOk = sigText === '' || sigText === '—'; }}
+    else if (selSig) {{ sigOk = sigText.includes(selSig); }}
+    let patOk = true;
+    if (selPat === '__NONE__') {{ patOk = patText === '' || patText === '—'; }}
+    else if (selPat) {{ patOk = patText.includes(selPat); }}
+    const show = (!q || ticker.includes(q)) && kScore >= minK && cScore >= minC && sigOk && patOk;
     tr.classList.toggle('hidden', !show);
   }});
 }}
 
 // ── 欄位排序（通用）──
-function makeSort(tableId) {{
+var _SIG_ORDER = {{'突破放量':4,'主力進場':3,'洗盤結束':2,'量縮整理':1}};
+var _PAT_ORDER = {{'A升評爆量':3,'B回檔承接':2,'C底背離':1}};
+var _ST_ORDER  = {{'matured':3,'partial':2,'open':1}};
+function _sigPri(txt) {{ for (var k in _SIG_ORDER) {{ if (txt.indexOf(k)>=0) return _SIG_ORDER[k]; }} return 0; }}
+function _patPri(txt) {{ var b=0; for (var k in _PAT_ORDER) {{ if (txt.indexOf(k)>=0 && _PAT_ORDER[k]>b) b=_PAT_ORDER[k]; }} return b; }}
+function _stPri(txt)  {{ for (var k in _ST_ORDER)  {{ if (txt.indexOf(k)>=0) return _ST_ORDER[k];  }} return 0; }}
+
+// sigCols/patCols/stCols: 指定哪幾個欄位用自訂排序
+function makeSort(tableId, sigCols, patCols, stCols) {{
+  sigCols = sigCols||[]; patCols = patCols||[]; stCols = stCols||[];
   let sortDir = {{}};
   return function(col) {{
     const tb = document.querySelector('#'+tableId+' tbody');
@@ -1243,18 +1282,42 @@ function makeSort(tableId) {{
     rows.sort((a, b) => {{
       const ac = a.cells[col], bc = b.cells[col];
       if (!ac || !bc) return 0;
-      let av = ac.innerText.replace(/[^0-9.+-]/g,'');
-      let bv = bc.innerText.replace(/[^0-9.+-]/g,'');
-      av = parseFloat(av); bv = parseFloat(bv);
-      if (isNaN(av)) av = sortDir[col] ? Infinity : -Infinity;
-      if (isNaN(bv)) bv = sortDir[col] ? Infinity : -Infinity;
-      return sortDir[col] ? av - bv : bv - av;
+      if (sigCols.indexOf(col)>=0) {{
+        const ap=_sigPri(ac.innerText), bp=_sigPri(bc.innerText);
+        return sortDir[col] ? ap-bp : bp-ap;
+      }}
+      if (patCols.indexOf(col)>=0) {{
+        const ap=_patPri(ac.innerText), bp=_patPri(bc.innerText);
+        return sortDir[col] ? ap-bp : bp-ap;
+      }}
+      if (stCols.indexOf(col)>=0) {{
+        const ap=_stPri(ac.innerText), bp=_stPri(bc.innerText);
+        return sortDir[col] ? ap-bp : bp-ap;
+      }}
+      let av=ac.innerText.replace(/[^0-9.+-]/g,'');
+      let bv=bc.innerText.replace(/[^0-9.+-]/g,'');
+      av=parseFloat(av); bv=parseFloat(bv);
+      if (isNaN(av)) av=sortDir[col]?Infinity:-Infinity;
+      if (isNaN(bv)) bv=sortDir[col]?Infinity:-Infinity;
+      return sortDir[col] ? av-bv : bv-av;
     }});
     rows.forEach(r => tb.appendChild(r));
   }};
 }}
-var sortTable  = makeSort('mainTable');
-var sortDbTable = makeSort('dbRecentTable');
+// 首頁：col13=今日訊號, col14=型態
+var sortTable  = makeSort('mainTable', [13], [14], []);
+// 統計資料庫：col3=訊號, col12=狀態
+var sortDbTable = makeSort('dbRecentTable', [3], [], [12]);
+
+// ── DB Slider 更新（含動態填色）──
+function updateDbSlider(t) {{
+  const el = t==='K' ? document.getElementById('dbFk') : document.getElementById('dbFc');
+  const valEl = t==='K' ? document.getElementById('dbValK') : document.getElementById('dbValC');
+  if (!el) return;
+  valEl.textContent = el.value;
+  const pct = el.value + '%';
+  el.style.background = 'linear-gradient(to right,#1a56db 0%,#1a56db '+pct+',#d1d5db '+pct+',#d1d5db 100%)';
+}}
 
 // ── DB 篩選 ──
 function filterDb() {{
@@ -1438,8 +1501,8 @@ def _gen_stats_tab(db):
   <div class="sec-title">近期訊號與 T+1 / T+3 / T+5 / T+7 / T+10</div>
   <div class="db-tools">
     <input type="text" id="dbQ" placeholder="代號 / 名稱" oninput="filterDb()">
-    <label>K線 ≥ <input type="number" id="dbFk" value="0" min="0" max="100" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px" oninput="filterDb()"></label>
-    <label>綜合 ≥ <input type="number" id="dbFc" value="0" min="0" max="100" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px" oninput="filterDb()"></label>
+    <div class="slider-wrap">K線 ≥ <input type="range" id="dbFk" min="0" max="100" value="0" oninput="updateDbSlider('K');filterDb()"><span class="slider-val" id="dbValK">0</span></div>
+    <div class="slider-wrap">綜合 ≥ <input type="range" id="dbFc" min="0" max="100" value="0" oninput="updateDbSlider('C');filterDb()"><span class="slider-val" id="dbValC">0</span></div>
     <span class="db-cnt">顯示 <b id="dbCnt">{n_total}</b> 筆</span>
   </div>
   <div style="overflow-x:auto">
@@ -1457,7 +1520,7 @@ def _gen_stats_tab(db):
       <th onclick="sortDbTable(9)">T+5</th>
       <th onclick="sortDbTable(10)">T+7</th>
       <th onclick="sortDbTable(11)">T+10</th>
-      <th>狀態</th>
+      <th onclick="sortDbTable(12)">狀態</th>
     </tr></thead>
     <tbody>{recent_rows}</tbody>
   </table>
