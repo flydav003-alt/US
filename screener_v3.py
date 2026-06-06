@@ -916,8 +916,8 @@ def generate_html(rows, sort_key, ascending, index_name, generated_at, market_in
         else:         cls, tag = "neg",        "🔻"
         bar = int(v)
         kline_url = f"https://flydav003-alt.github.io/k-line/?stock={ticker}"
-        link = f'<a href="{kline_url}" target="_blank" style="text-decoration:none;color:inherit;"><span class="score-num">{v}</span></a>'
-        return f'<td class="{cls} score-cell">{tag}{link}<div class="score-bar"><div class="score-fill" style="width:{bar}%"></div></div></td>'
+        link = f'<a href="{kline_url}" target="_blank" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:2px">{tag}<span class="score-num">{v}</span></a>'
+        return f'<td class="{cls} score-cell">{link}<div class="score-bar"><div class="score-fill" style="width:{bar}%"></div></div></td>'
 
     def entry_signal_cell(v):
         if not v: return '<td class="na">—</td>'
@@ -1161,6 +1161,21 @@ td.analysts {{ color:#888; font-size:11px; }}
     綜合分 ≥ <input type="range" id="sliderC" min="0" max="100" value="0" oninput="updateSlider('C');filterTable()">
     <span class="slider-val" id="valC">0</span>
   </div>
+  <select id="selSig" onchange="filterTable()" style="padding:5px 8px;border:1px solid #ccc;border-radius:6px;font-size:12px;background:#fff;color:#333;cursor:pointer">
+    <option value="">全部訊號</option>
+    <option value="突破放量">💥突破放量</option>
+    <option value="主力進場">🚀主力進場</option>
+    <option value="洗盤結束">✅洗盤結束</option>
+    <option value="量縮整理">📉量縮整理</option>
+    <option value="__NONE__">（無訊號）</option>
+  </select>
+  <select id="selPat" onchange="filterTable()" style="padding:5px 8px;border:1px solid #ccc;border-radius:6px;font-size:12px;background:#fff;color:#333;cursor:pointer">
+    <option value="">全部型態</option>
+    <option value="A升評爆量">A升評爆量</option>
+    <option value="B回檔承接">B回檔承接</option>
+    <option value="C底背離">C底背離</option>
+    <option value="__NONE__">（無型態）</option>
+  </select>
 </div>
 
 <div class="table-wrap">
@@ -1219,18 +1234,39 @@ function filterTable() {{
   const q    = document.getElementById('searchBox').value.toLowerCase();
   const minK = parseInt(document.getElementById('sliderK').value) || 0;
   const minC = parseInt(document.getElementById('sliderC').value) || 0;
+  const selSig = document.getElementById('selSig').value;
+  const selPat = document.getElementById('selPat').value;
   document.querySelectorAll('#mainTable tbody tr').forEach(tr => {{
     const ticker  = tr.cells[0].innerText.toLowerCase();
     const klineEl = tr.cells[5].querySelector('.score-num');
     const scoreEl = tr.cells[6].querySelector('.score-num');
     const kScore  = klineEl ? parseFloat(klineEl.innerText) : 0;
     const cScore  = scoreEl ? parseFloat(scoreEl.innerText) : 0;
-    const show = (!q || ticker.includes(q)) && kScore >= minK && cScore >= minC;
+    const sigText = tr.cells[13] ? tr.cells[13].innerText.trim() : '';
+    const patText = tr.cells[14] ? tr.cells[14].innerText.trim() : '';
+    let sigOk = true;
+    if (selSig === '__NONE__') {{ sigOk = sigText === '' || sigText === '—'; }}
+    else if (selSig) {{ sigOk = sigText.includes(selSig); }}
+    let patOk = true;
+    if (selPat === '__NONE__') {{ patOk = patText === '' || patText === '—'; }}
+    else if (selPat) {{ patOk = patText.includes(selPat); }}
+    const show = (!q || ticker.includes(q)) && kScore >= minK && cScore >= minC && sigOk && patOk;
     tr.classList.toggle('hidden', !show);
   }});
 }}
 
 // ── 欄位排序（通用）──
+var _SIG_ORDER = {{'突破放量':4,'主力進場':3,'洗盤結束':2,'量縮整理':1}};
+var _PAT_ORDER = {{'A升評爆量':3,'B回檔承接':2,'C底背離':1}};
+function _sigPri(txt) {{
+  for (var k in _SIG_ORDER) {{ if (txt.indexOf(k) >= 0) return _SIG_ORDER[k]; }}
+  return 0;
+}}
+function _patPri(txt) {{
+  var best = 0;
+  for (var k in _PAT_ORDER) {{ if (txt.indexOf(k) >= 0 && _PAT_ORDER[k] > best) best = _PAT_ORDER[k]; }}
+  return best;
+}}
 function makeSort(tableId) {{
   let sortDir = {{}};
   return function(col) {{
@@ -1241,6 +1277,16 @@ function makeSort(tableId) {{
     rows.sort((a, b) => {{
       const ac = a.cells[col], bc = b.cells[col];
       if (!ac || !bc) return 0;
+      // 今日訊號欄（col=13）
+      if (col === 13) {{
+        const ap = _sigPri(ac.innerText), bp = _sigPri(bc.innerText);
+        return sortDir[col] ? ap - bp : bp - ap;
+      }}
+      // 型態欄（col=14）
+      if (col === 14) {{
+        const ap = _patPri(ac.innerText), bp = _patPri(bc.innerText);
+        return sortDir[col] ? ap - bp : bp - ap;
+      }}
       let av = ac.innerText.replace(/[^0-9.+-]/g,'');
       let bv = bc.innerText.replace(/[^0-9.+-]/g,'');
       av = parseFloat(av); bv = parseFloat(bv);
@@ -1255,6 +1301,10 @@ var sortTable  = makeSort('mainTable');
 var sortDbTable = makeSort('dbRecentTable');
 
 // ── DB 篩選 ──
+function updateDbSlider(t) {{
+  if (t==='K') document.getElementById('dbValK').textContent = document.getElementById('dbFk').value;
+  else          document.getElementById('dbValC').textContent = document.getElementById('dbFc').value;
+}}
 function filterDb() {{
   const q  = (document.getElementById('dbQ')?.value||'').toLowerCase();
   const fk = parseInt(document.getElementById('dbFk')?.value)||0;
@@ -1436,8 +1486,8 @@ def _gen_stats_tab(db):
   <div class="sec-title">近期訊號與 T+1 / T+3 / T+5 / T+7 / T+10</div>
   <div class="db-tools">
     <input type="text" id="dbQ" placeholder="代號 / 名稱" oninput="filterDb()">
-    <label>K線 ≥ <input type="number" id="dbFk" value="0" min="0" max="100" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px" oninput="filterDb()"></label>
-    <label>綜合 ≥ <input type="number" id="dbFc" value="0" min="0" max="100" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px" oninput="filterDb()"></label>
+    <div class="slider-wrap">K線 ≥ <input type="range" id="dbFk" min="0" max="100" value="0" oninput="updateDbSlider('K');filterDb()"><span class="slider-val" id="dbValK">0</span></div>
+    <div class="slider-wrap">綜合 ≥ <input type="range" id="dbFc" min="0" max="100" value="0" oninput="updateDbSlider('C');filterDb()"><span class="slider-val" id="dbValC">0</span></div>
     <span class="db-cnt">顯示 <b id="dbCnt">{n_total}</b> 筆</span>
   </div>
   <div style="overflow-x:auto">
