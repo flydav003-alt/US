@@ -1,0 +1,36 @@
+name: US Stock Screener
+
+on:
+  schedule:
+    # 台灣時間 11:50 = UTC 03:50，只跑週二到週六
+    - cron: '50 3 * * 2-6'
+  workflow_dispatch:   # 允許手動觸發
+
+permissions:
+  contents: write      # 需要推送 docs/ 回 repo
+
+jobs:
+  run-screener:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run screener
+        run: python screener_v3.py CORE
+
+      - name: Commit & push results
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html docs/stats_db.json
+          git diff --cached --quiet || git commit -m "📊 auto update $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
