@@ -564,6 +564,9 @@ def fetch_ticker_data(ticker):
             base["upside_pct"] = (base["targetMean"] - base["price"]) / base["price"] * 100
 
         hist = t.history(period="1y")
+        # 移除末尾 Close=nan 的不完整當日 bar（盤中執行或 yfinance 插入預告行時會出現）
+        if hist is not None and not hist.empty:
+            hist = hist[hist["Close"].notna()]
         if hist is not None and len(hist) >= 20:
             closes  = hist["Close"]
             volumes = hist["Volume"]
@@ -693,7 +696,11 @@ def fetch_spy_data():
     try:
         spy = yf.Ticker("SPY")
         h = spy.history(period="3mo")
-        if h is None or len(h) < 22:
+        if h is None or h.empty:
+            return None
+        # 移除末尾 Close=nan 的不完整當日 bar（盤中執行時 yfinance 會插入）
+        h = h[h["Close"].notna()]
+        if len(h) < 22:
             return None
         closes = h["Close"]
         ret5d  = round((float(closes.iloc[-1]) / float(closes.iloc[-6]) - 1) * 100, 2)
